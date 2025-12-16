@@ -117,3 +117,14 @@ images/
 .vscode/
 *.swp
 *.swo
+
+# LaTeX build artifacts
+*.aux
+*.out
+*.toc
+*.bbl
+*.blg
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+report.pdf
