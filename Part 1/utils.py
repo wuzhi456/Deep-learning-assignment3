@@ -26,16 +26,6 @@ class AverageMeter(object):
 
 @torch.no_grad()
 def accuracy(output, target):
-    """
-    Compute accuracy for predictions.
-    
-    Args:
-        output: Model predictions (logits), shape (batch_size, num_classes)
-        target: Ground truth labels, shape (batch_size,)
-    
-    Returns:
-        Accuracy as a percentage (0-100)
-    """
     # Get predicted class (index with maximum value)
     predictions = torch.argmax(output, dim=1)
     # Compare predictions with targets
