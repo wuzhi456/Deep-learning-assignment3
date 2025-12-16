@@ -7,8 +7,6 @@ import torchvision.transforms as transforms
 from torchvision.utils import save_image
 from torchvision import datasets
 
-# Global args variable
-args = None
 
 class Generator(nn.Module):
     def __init__(self, latent_dim):
@@ -87,11 +85,23 @@ class Discriminator(nn.Module):
         return self.model(img_flat)
 
 
-def train(dataloader, discriminator, generator, optimizer_G, optimizer_D, device):
+def train(dataloader, discriminator, generator, optimizer_G, optimizer_D, device, config):
+    """
+    Train the GAN.
+    
+    Args:
+        dataloader: DataLoader for training data
+        discriminator: Discriminator model
+        generator: Generator model
+        optimizer_G: Optimizer for generator
+        optimizer_D: Optimizer for discriminator
+        device: Device to train on (cpu/cuda)
+        config: Configuration namespace with n_epochs, latent_dim, save_interval
+    """
     # Loss function
     criterion = nn.BCELoss()
     
-    for epoch in range(args.n_epochs):
+    for epoch in range(config.n_epochs):
         for i, (imgs, _) in enumerate(dataloader):
             batch_size = imgs.size(0)
             
@@ -112,7 +122,7 @@ def train(dataloader, discriminator, generator, optimizer_G, optimizer_D, device
             d_loss_real = criterion(real_output, real_labels)
             
             # Generate fake images
-            z = torch.randn(batch_size, args.latent_dim, device=device)
+            z = torch.randn(batch_size, config.latent_dim, device=device)
             fake_imgs = generator(z)
             
             # Loss for fake images
@@ -130,7 +140,7 @@ def train(dataloader, discriminator, generator, optimizer_G, optimizer_D, device
             optimizer_G.zero_grad()
             
             # Generate fake images
-            z = torch.randn(batch_size, args.latent_dim, device=device)
+            z = torch.randn(batch_size, config.latent_dim, device=device)
             gen_imgs = generator(z)
             
             # Generator tries to fool discriminator
@@ -144,18 +154,22 @@ def train(dataloader, discriminator, generator, optimizer_G, optimizer_D, device
             # Save Images
             # ---------------------
             batches_done = epoch * len(dataloader) + i
-            if batches_done % args.save_interval == 0:
+            if batches_done % config.save_interval == 0:
                 # Save 25 generated images
                 save_image(gen_imgs[:25],
                            'images/{}.png'.format(batches_done),
                            nrow=5, normalize=True, value_range=(-1, 1))
-                print(f"[Epoch {epoch}/{args.n_epochs}] [Batch {i}/{len(dataloader)}] "
+                print(f"[Epoch {epoch}/{config.n_epochs}] [Batch {i}/{len(dataloader)}] "
                       f"[D loss: {d_loss.item():.4f}] [G loss: {g_loss.item():.4f}]")
 
 
-def main():
-    global args
+def main(config):
+    """
+    Main function to set up and run GAN training.
     
+    Args:
+        config: Configuration namespace with training parameters
+    """
     # Set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
@@ -170,16 +184,16 @@ def main():
                            transforms.ToTensor(),
                            transforms.Normalize((0.5,),
                                                 (0.5,))])),
-        batch_size=args.batch_size, shuffle=True)
+        batch_size=config.batch_size, shuffle=True)
 
     # Initialize models and optimizers
-    generator = Generator(args.latent_dim).to(device)
+    generator = Generator(config.latent_dim).to(device)
     discriminator = Discriminator().to(device)
-    optimizer_G = torch.optim.Adam(generator.parameters(), lr=args.lr, betas=(0.5, 0.999))
-    optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=args.lr, betas=(0.5, 0.999))
+    optimizer_G = torch.optim.Adam(generator.parameters(), lr=config.lr, betas=(0.5, 0.999))
+    optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=config.lr, betas=(0.5, 0.999))
 
     # Start training
-    train(dataloader, discriminator, generator, optimizer_G, optimizer_D, device)
+    train(dataloader, discriminator, generator, optimizer_G, optimizer_D, device, config)
 
     # Save generator model
     torch.save(generator.state_dict(), "mnist_generator.pt")
@@ -200,4 +214,4 @@ if __name__ == "__main__":
                         help='save every SAVE_INTERVAL iterations')
     args = parser.parse_args()
 
-    main()
+    main(args)

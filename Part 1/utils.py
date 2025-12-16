@@ -34,7 +34,7 @@ def accuracy(output, target):
         target: Ground truth labels, shape (batch_size,)
     
     Returns:
-        Accuracy as a float between 0 and 1
+        Accuracy as a percentage (0-100)
     """
     # Get predicted class (index with maximum value)
     predictions = torch.argmax(output, dim=1)
