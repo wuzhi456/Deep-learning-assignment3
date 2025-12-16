@@ -1,0 +1,285 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{geometry}
+\usepackage{booktabs}
+
+\geometry{margin=1in}
+
+% Code listing style
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny\color{gray}
+}
+
+\title{\textbf{CS324: Deep Learning}\\Assignment 3 Report}
+\author{Student Name\\Student Number}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+\newpage
+
+%% ==================== Part I ====================
+\section{Part I: PyTorch LSTM (40 points)}
+
+In this part, we implement an LSTM network from scratch without using \texttt{torch.nn.LSTM} to solve the palindrome prediction task. The LSTM is designed to overcome the limitations of vanilla RNNs in memorizing long sequences.
+
+\subsection{Task 1: LSTM Implementation}
+
+\subsubsection{Model Architecture}
+
+The LSTM follows the standard equations as specified in the assignment:
+
+\begin{align}
+g^{(t)} &= \tanh(W_{gx}x^{(t)} + W_{gh}h^{(t-1)} + b_g) \\
+i^{(t)} &= \sigma(W_{ix}x^{(t)} + W_{ih}h^{(t-1)} + b_i) \\
+f^{(t)} &= \sigma(W_{fx}x^{(t)} + W_{fh}h^{(t-1)} + b_f) \\
+o^{(t)} &= \sigma(W_{ox}x^{(t)} + W_{oh}h^{(t-1)} + b_o) \\
+c^{(t)} &= g^{(t)} \odot i^{(t)} + c^{(t-1)} \odot f^{(t)} \\
+h^{(t)} &= \tanh(c^{(t)}) \odot o^{(t)} \\
+p^{(t)} &= W_{ph}h^{(t)} + b_p \\
+\tilde{y}^{(t)} &= \text{softmax}(p^{(t)})
+\end{align}
+
+where $\odot$ denotes element-wise multiplication, $g$ is the input modulation gate, $i$ is the input gate, $f$ is the forget gate, and $o$ is the output gate.
+
+\subsubsection{Implementation Details}
+
+The LSTM is implemented in \texttt{lstm.py} with the following key features:
+
+\begin{itemize}
+    \item \textbf{Weight Parameters}: Separate weight matrices for each gate ($W_{gx}$, $W_{gh}$, $W_{ix}$, $W_{ih}$, $W_{fx}$, $W_{fh}$, $W_{ox}$, $W_{oh}$) and the output layer ($W_{ph}$).
+    \item \textbf{Bias Terms}: Corresponding bias vectors for each gate and the output layer.
+    \item \textbf{Initialization}: Xavier/Glorot initialization for weights, zeros for biases (except forget gate bias initialized to 1 for better gradient flow).
+    \item \textbf{Forward Pass}: Uses a for loop to process the sequence step by step.
+    \item \textbf{Backward Pass}: Relies on PyTorch's automatic differentiation.
+\end{itemize}
+
+\subsubsection{Training Configuration}
+
+\begin{itemize}
+    \item \textbf{Optimizer}: RMSprop
+    \item \textbf{Learning Rate}: 0.001
+    \item \textbf{Hidden Dimension}: 128
+    \item \textbf{Batch Size}: 128
+    \item \textbf{Gradient Clipping}: max norm = 10.0
+    \item \textbf{Loss Function}: Cross-Entropy Loss
+\end{itemize}
+
+\subsection{Task 2: Training Results}
+
+The LSTM is trained on palindrome sequences of length $T=5$ (input\_length = 4). The network predicts the $T$-th digit given the preceding $T-1$ digits.
+
+\subsubsection{Training and Validation Curves}
+
+Figure \ref{fig:lstm_curves} shows the training and validation accuracy curves during training. As expected, the LSTM achieves near-perfect accuracy on the $T=5$ palindrome task.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{lstm_training_curves.png}
+    \caption{LSTM Training Curves: Training and validation accuracy over epochs for the palindrome prediction task with $T=5$.}
+    \label{fig:lstm_curves}
+\end{figure}
+
+\subsubsection{Results Analysis}
+
+\begin{itemize}
+    \item The LSTM achieves close to 100\% accuracy on the palindrome task with $T=5$.
+    \item Compared to vanilla RNNs, the LSTM demonstrates superior ability to capture long-range dependencies due to its gating mechanisms.
+    \item The forget gate allows the model to selectively retain or discard information from previous time steps.
+    \item The input and output gates control the flow of information into and out of the cell state.
+\end{itemize}
+
+%% ==================== Part II ====================
+\section{Part II: Generative Adversarial Networks (60 points)}
+
+In this part, we implement a GAN to generate images similar to the MNIST dataset. The GAN consists of a Generator and a Discriminator that are trained in an adversarial manner.
+
+\subsection{Task 1: GAN Architecture and Training}
+
+\subsubsection{GAN Objective}
+
+The GAN training involves solving the following minimax optimization:
+\begin{equation}
+\min_G \max_D V(D, G) = \min_G \max_D \mathbb{E}_p[\log D(X)] + \mathbb{E}_q[\log(1 - D(G(Z)))]
+\end{equation}
+
+\subsubsection{Generator Architecture}
+
+The Generator takes a latent vector $z$ from a standard Normal distribution and transforms it into an image:
+
+\begin{itemize}
+    \item Linear: latent\_dim $\rightarrow$ 128
+    \item LeakyReLU(0.2)
+    \item Linear: 128 $\rightarrow$ 256, BatchNorm, LeakyReLU(0.2)
+    \item Linear: 256 $\rightarrow$ 512, BatchNorm, LeakyReLU(0.2)
+    \item Linear: 512 $\rightarrow$ 1024, BatchNorm, LeakyReLU(0.2)
+    \item Linear: 1024 $\rightarrow$ 784, Tanh
+    \item Reshape to (1, 28, 28)
+\end{itemize}
+
+\subsubsection{Discriminator Architecture}
+
+The Discriminator takes an image and outputs a probability indicating whether it is real or fake:
+
+\begin{itemize}
+    \item Flatten: (1, 28, 28) $\rightarrow$ 784
+    \item Linear: 784 $\rightarrow$ 512, LeakyReLU(0.2)
+    \item Linear: 512 $\rightarrow$ 256, LeakyReLU(0.2)
+    \item Linear: 256 $\rightarrow$ 1, Sigmoid
+\end{itemize}
+
+\subsubsection{Training Configuration}
+
+\begin{itemize}
+    \item \textbf{Optimizer}: Adam (both Generator and Discriminator)
+    \item \textbf{Learning Rate}: 0.0002
+    \item \textbf{Betas}: (0.5, 0.999)
+    \item \textbf{Batch Size}: 64
+    \item \textbf{Latent Dimension}: 100
+    \item \textbf{Loss Function}: Binary Cross-Entropy Loss
+\end{itemize}
+
+\subsubsection{Training Curves}
+
+Figure \ref{fig:gan_curves} shows the Generator and Discriminator losses during training.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{gan_training_curves.png}
+    \caption{GAN Training Loss: Generator and Discriminator losses over epochs.}
+    \label{fig:gan_curves}
+\end{figure}
+
+\subsection{Task 2: Generated Samples at Different Training Stages}
+
+We sample 25 images from the GAN at three different stages: at the start of training, halfway through training, and after training is complete.
+
+\subsubsection{Start of Training (Epoch 1)}
+
+At the beginning of training, the Generator produces random noise-like patterns as it has not yet learned to generate meaningful digit structures.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{start_of_training_(epoch_1).png}
+    \caption{Generated samples at the start of training (Epoch 1). The images appear as random noise.}
+    \label{fig:gan_epoch1}
+\end{figure}
+
+\subsubsection{Halfway Through Training (Epoch 25)}
+
+After approximately half of the training epochs, the Generator starts producing recognizable digit-like patterns, though they may still be blurry or incomplete.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{halfway_through_training_(epoch_25).png}
+    \caption{Generated samples halfway through training (Epoch 25). Digit structures become visible.}
+    \label{fig:gan_epoch25}
+\end{figure}
+
+\subsubsection{End of Training (Epoch 50)}
+
+After training is complete, the Generator produces clear and realistic digit images that closely resemble the MNIST training data.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{end_of_training_(epoch_50).png}
+    \caption{Generated samples at the end of training (Epoch 50). The generated digits are clear and realistic.}
+    \label{fig:gan_epoch50}
+\end{figure}
+
+\subsection{Task 3: Latent Space Interpolation}
+
+We demonstrate the smoothness of the learned latent space by interpolating between two random latent vectors. This produces a sequence of 9 images (including start and end points with 7 interpolation steps in between).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{latent_interpolation.png}
+    \caption{Latent space interpolation between two different digits. The interpolation shows a smooth transition, indicating that the Generator has learned a meaningful latent representation.}
+    \label{fig:interpolation}
+\end{figure}
+
+\subsubsection{Interpolation Method}
+
+Given two latent vectors $z_1$ and $z_2$, the interpolation is performed using linear interpolation:
+\begin{equation}
+z_\alpha = (1 - \alpha) \cdot z_1 + \alpha \cdot z_2, \quad \alpha \in \{0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1\}
+\end{equation}
+
+The smooth transitions in the generated images indicate that the GAN has learned a continuous and meaningful latent space representation.
+
+%% ==================== Summary ====================
+\section{Summary}
+
+\subsection{Part I: LSTM}
+\begin{itemize}
+    \item Successfully implemented LSTM from scratch without using \texttt{torch.nn.LSTM}.
+    \item The model follows the standard LSTM equations with input modulation, input, forget, and output gates.
+    \item Achieved near-perfect accuracy on palindrome sequences with $T=5$.
+    \item The LSTM demonstrates superior performance compared to vanilla RNNs for sequence tasks requiring long-term memory.
+\end{itemize}
+
+\subsection{Part II: GAN}
+\begin{itemize}
+    \item Implemented Generator and Discriminator networks for MNIST image generation.
+    \item The GAN was trained using adversarial training with Binary Cross-Entropy loss.
+    \item Generated samples show clear progression from random noise (Epoch 1) to realistic digits (Epoch 50).
+    \item Latent space interpolation demonstrates smooth transitions, indicating a well-learned latent representation.
+\end{itemize}
+
+%% ==================== Code Instructions ====================
+\section{Instructions for Running the Code}
+
+\subsection{Part I: LSTM}
+
+\subsubsection{File Structure}
+\begin{itemize}
+    \item \texttt{Part 1/lstm.py}: LSTM model implementation
+    \item \texttt{Part 1/train.py}: Training script
+    \item \texttt{Part 1/dataset.py}: Palindrome dataset
+    \item \texttt{Part 1/utils.py}: Utility functions
+\end{itemize}
+
+\subsubsection{Running the Training}
+\begin{lstlisting}[language=bash]
+cd "Part 1"
+python train.py --input_length 4 --max_epoch 50 --learning_rate 0.001
+\end{lstlisting}
+
+\subsection{Part II: GAN}
+
+\subsubsection{File Structure}
+\begin{itemize}
+    \item \texttt{Part 2/my\_gan.py}: GAN model and training implementation
+\end{itemize}
+
+\subsubsection{Running the Training}
+\begin{lstlisting}[language=bash]
+cd "Part 2"
+python my_gan.py --n_epochs 50 --batch_size 64 --lr 0.0002 --latent_dim 100
+\end{lstlisting}
+
+\subsection{Jupyter Notebook}
+
+A comprehensive Jupyter notebook (\texttt{Assignment3\_Notebook.ipynb}) is provided that demonstrates all experiments and results. The notebook can be run cell by cell to reproduce all results presented in this report.
+
+\end{document}
